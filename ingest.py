@@ -11,7 +11,7 @@ from sentence_transformers import SentenceTransformer
 
 
 # Config
-DATA_DIR = os.path.join("data", "materijali")
+DATA_DIR = os.path.join("data", "materials")
 CHROMA_DIR = "chroma_db"
 COLLECTION_NAME = "fidit_kolegij"
 

@@ -128,6 +128,7 @@ def call_llm(model_name: str, prompt: str) -> str:
         prompt=prompt,
         options={
             "temperature": 0.2, # niska temperatura da ne halucinira previse
+            "num_predict": 220 # max tokena da model ne piše "cijeli roman"
         }
     )
     return resp["response"].strip()
@@ -155,8 +156,15 @@ col1, col2 = st.columns([2, 1])
 
 with col2:
     st.subheader("Postavke")
-    model_name = st.text_input("Ollama model", value=DEFAULT_LLM_MODEL, help="Npr. mistral, phi3... mora bit upaljen u ollami")
-    top_k = st.slider("Broj dohvaćenih odlomaka", 2, 10, TOP_K)
+    model_name = st.text_input("Ollama model", value=DEFAULT_LLM_MODEL, help="Npr. mistral... mora bit upaljen u ollami")
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        st.write("Brzo, ali manje")
+    with c2:
+        # Desno poravnanje teksta
+        st.markdown("<p style='text-align: right;'>Sporo, ali više</p>", unsafe_allow_html=True)
+
+    top_k = st.slider("", 2, 10, TOP_K, label_visibility="collapsed")
 
     if st.button("Provjeri kolekciju"):
         try:
