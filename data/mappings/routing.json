@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "keywords": ["swot"],
+      "sources": ["1. Inovacija, ideja i analiza tržišta.pdf"]
+    },
+    {
+      "keywords": ["pestle", "pest", "analiza okruženja"],
+      "sources": ["1. Inovacija, ideja i analiza tržišta.pdf"]
+    },
+    {
+      "keywords": ["lean", "mvp", "bmc", "business model canvas"],
+      "sources": ["3. Lean i BMC.pdf"]
+    },
+    {
+      "keywords": ["sigurnost", "enkripcija", "ssl", "tls", "phishing", "2fa", "autentikacija"],
+      "sources": ["5. ePlaćanje i sigurnost.pdf"]
+    },
+    {
+      "keywords": ["gdpr", "privatnost", "društvene mreže"],
+      "sources": ["9. Razvoj IKT, privatnost i društvene ... .pdf"]
+    }
+  ]
+}
