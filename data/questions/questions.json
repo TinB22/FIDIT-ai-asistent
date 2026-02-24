@@ -1,0 +1,22 @@
+{
+  "questions": [
+    {
+      "id": "Q001",
+      "type": "teorija",
+      "question": "Što je SWOT analiza i čemu služi?",
+      "tags": ["swot", "analiza tržišta"]
+    },
+    {
+      "id": "Q002",
+      "type": "teorija",
+      "question": "Objasni PESTLE analizu i navedi primjer faktora.",
+      "tags": ["pestle", "okruženje"]
+    },
+    {
+      "id": "Q003",
+      "type": "prakticno",
+      "question": "Napravi primjer SWOT analize za mali web shop koji prodaje lokalne proizvode.",
+      "tags": ["swot", "primjer"]
+    }
+  ]
+}

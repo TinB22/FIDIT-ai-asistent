@@ -114,6 +114,7 @@ def main():
                     "source": source_name,
                     "page": page_no,
                     "chunk_index": ci,
+                    "source_path": pdf_path
                 })
                 total_chunks += 1
 

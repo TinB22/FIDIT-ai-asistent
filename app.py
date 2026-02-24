@@ -1,154 +1,80 @@
+import json
 import os
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List
 
 import streamlit as st
-import chromadb
-from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
-
 import ollama
 
-# Config i putanje
-CHROMA_DIR = "chroma_db"
-COLLECTION_NAME = "fidit_kolegij"
+from src.rag import (
+    extractive_fallback_answer,
+    load_collection,
+    load_embedder,
+    load_routing_rules,
+    route_sources,
+    retrieve_context,
+    should_clarify,
+    clarifying_questions,
+    build_prompt,
+    format_citations,
+    normalize_query,
+)
+from src.privacy import redact_personal_data
+from src.cache import stable_key, get_cached_answer, set_cached_answer
 
-# model za embeddinge, ovaj je okej za performanse
-EMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-
-# mistral je default, al moze i phi3 ako nekome steka komp
+# Fiksne postavke
 DEFAULT_LLM_MODEL = "mistral"
-TOP_K = 5
-
-# Heuristika da ne lupa gluposti ako nema nista u bazi
-MIN_DOCS_FOR_ANSWER = 2
-MAX_DISTANCE_FOR_CONFIDENCE = 0.55  # prag za slicnost, iznad ovoga je vjv irelevantno
-
-
-# Logika za bazu i model
-@st.cache_resource
-def load_embedder():
-    return SentenceTransformer(EMBED_MODEL_NAME)
+DEFAULT_TOP_K = 5
+DEFAULT_TEMPERATURE = 0.2
 
 
 @st.cache_resource
-def load_chroma_collection():
-    # gasim telemetriju da ne salje bezveze podatke van
-    client = chromadb.PersistentClient(
-        path=CHROMA_DIR,
-        settings=Settings(anonymized_telemetry=False)
-    )
-    return client.get_or_create_collection(name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
+def get_embedder():
+    return load_embedder()
 
 
-def retrieve_context(collection, embedder, query: str, top_k: int = TOP_K):
-    # pretvori upit u vektor i trazi najslicnije u chromi
-    q_emb = embedder.encode([query], normalize_embeddings=True).tolist()
-    res = collection.query(
-        query_embeddings=q_emb,
-        n_results=top_k,
-        include=["documents", "metadatas", "distances"]
-    )
-
-    docs = res.get("documents", [[]])[0]
-    metas = res.get("metadatas", [[]])[0]
-    dists = res.get("distances", [[]])[0]
-    return docs, metas, dists
+@st.cache_resource
+def get_collection():
+    return load_collection()
 
 
-def format_citations(metas: List[Dict[str, Any]]) -> str:
-    # filtriraj duplate da ne ispisuje istu stranicu vise puta
-    seen = set()
-    lines = []
-    for m in metas:
-        key = (m.get("source"), m.get("page"))
-        if key in seen:
-            continue
-        seen.add(key)
-        lines.append(f"- {m.get('source')} (str. {m.get('page')})")
-    return "\n".join(lines) if lines else "- (nema citata)"
+@st.cache_resource
+def get_routing_rules():
+    return load_routing_rules()
 
 
-def should_ask_clarifying_question(docs: List[str], dists: List[float]) -> Tuple[bool, str]:
-    # provjera jel uopce imamo pametne podatke za odgovor
-    if len(docs) < MIN_DOCS_FOR_ANSWER:
-        return True, "Nemam dovoljno materijala iz baze za siguran odgovor."
-    if not dists:
-        return True, "Nemam dovoljno signala za odgovor."
-    
-    best = dists[0]
-    if best > MAX_DISTANCE_FOR_CONFIDENCE:
-        # ako je distance prevelik, znaci da je fulao temu
-        return True, "Pitanje je preširoko ili nije jasno povezano s materijalima."
-    return False, ""
+def load_questions() -> List[Dict[str, Any]]:
+    path = os.path.join("data", "questions", "questions.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("questions", [])
+    except Exception as e:
+        answer = "Greška pri generiranju (Ollama). Prikazujem sažetak iz materijala:\n\n"
+        answer += extractive_fallback_answer(redacted_q, docs)
 
 
-def generate_clarifying_questions(user_q: str) -> str:
-    # fiksni odgovor ako sustav nije siguran, cisto da usmjeri korisnika
-    return (
-        "Mogu pomoći, ali trebam malo preciznije:\n"
-        "1) Na koje poglavlje / temu iz materijala misliš?\n"
-        "2) Je li pitanje teorijsko ili želiš primjer/zadatak?\n"
-        "3) Imaš li konkretan pojam/definiciju koju treba objasniti?"
-    )
-
-
-def build_prompt(user_q: str, context_docs: List[str], context_metas: List[Dict[str, Any]]) -> str:
-    # slazemo prompt za LLM s pravilima ponasanja
-    citations = format_citations(context_metas)
-    context_block = "\n\n---\n\n".join(context_docs)
-
-    return f"""
-Ti si AI asistent za podršku učenju.
-Odgovaraj prvenstveno na temelju priloženih službenih materijala kolegija.
-Ako informacija nije u kontekstu, jasno reci da nisi siguran i predloži što student može provjeriti.
-
-PRAVILA:
-- Ne izmišljaj činjenice.
-- Budi jasan, pedagoški, sa primjerom ako je prikladno.
-- Na kraju prikaži "IZVORI" koje si koristio.
-- Ne traži niti pohranjuj osobne podatke.
-
-PITANJE STUDENTA:
-{user_q}
-
-KONTEKST (iz vektorske baze):
-{context_block}
-
-IZVORI (iz metapodataka):
-{citations}
-
-Odgovori na hrvatskom.
-"""
-
-
-def call_llm(model_name: str, prompt: str) -> str:
-    # spoji se na lokalni ollama server
+def call_llm(model_name: str, prompt: str, temperature: float) -> str:
     resp = ollama.generate(
         model=model_name,
         prompt=prompt,
         options={
-            "temperature": 0.2, # niska temperatura da ne halucinira previse
-            "num_predict": 220 # max tokena da model ne piše "cijeli roman"
-        }
+            "temperature": temperature,
+        },
     )
     return resp["response"].strip()
 
 
-# Streamlit UI dio
+# Streamlit UI
 st.set_page_config(page_title="FIDIT AI asistent", layout="wide")
-
 st.title("FIDIT - AI asistent za podršku učenju")
 
 with st.expander("Važne informacije (transparentnost)", expanded=True):
     st.markdown(
         """
-**Komuniciraš s AI sustavom.** Odgovori su namijenjeni isključivo kao pomoć u učenju i **ne zamjenjuju nastavu, službene materijale ni profesora**.
-
-**Privatnost:** sustav je prototip i **ne prikuplja osobne podatke** niti sprema razgovore u bazu.  
-Ako uneseš osobne podatke, preporuka je da ih odmah ukloniš iz upita.
-
-**Izvori:** odgovori se temelje prvenstveno na službenim materijalima kolegija.  
-Kada se koristi sadržaj, sustav prikazuje citate (izvor + stranica).
+**Komuniciraš s AI sustavom.** Odgovori služe kao pomoć u učenju i ne zamjenjuju službenu nastavu.
+**Privatnost:** Sustav ne sprema tvoje podatke.
         """
     )
 
@@ -156,62 +82,117 @@ col1, col2 = st.columns([2, 1])
 
 with col2:
     st.subheader("Postavke")
-    model_name = st.text_input("Ollama model", value=DEFAULT_LLM_MODEL, help="Npr. mistral... mora bit upaljen u ollami")
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        st.write("Brzo, ali manje")
-    with c2:
-        # Desno poravnanje teksta
-        st.markdown("<p style='text-align: right;'>Sporo, ali više</p>", unsafe_allow_html=True)
+    model_name = st.text_input("Ollama model", value=DEFAULT_LLM_MODEL)
 
-    top_k = st.slider("", 2, 10, TOP_K, label_visibility="collapsed")
+    st.write("Količina konteksta")
+    st.markdown(
+        """
+        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #888; margin-bottom: -10px;">
+            <span>Brzo, ali manje</span>
+            <span>Sporo, ali više</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    top_k = st.slider("", 2, 10, DEFAULT_TOP_K, label_visibility="collapsed")
 
-    if st.button("Provjeri kolekciju"):
-        try:
-            collection = load_chroma_collection()
-            st.success(f"Kolekcija '{COLLECTION_NAME}' ima {collection.count()} dokumenata.")
-        except Exception as e:
-            st.error(f"Greška kod baze: {e}")
+    show_debug = st.checkbox("Prikaži debug info", value=False)
+
+    st.divider()
+    st.subheader("Test pitanja")
+    questions = load_questions()
+    q_labels = ["(odaberi)"] + [f"{q['id']} – {q['question']}" for q in questions]
+    selected = st.selectbox("Odaberi pitanje iz baze:", q_labels, index=0)
 
 with col1:
     st.subheader("Chat")
+
     if "history" not in st.session_state:
         st.session_state.history = []
 
-    user_q = st.text_input("Upiši pitanje:", placeholder="Npr. Što je digitalna inovacija?")
+    prefill = ""
+    selected_q = None
+    if selected and selected != "(odaberi)":
+        qid = selected.split(" – ", 1)[0]
+        selected_q = next((q for q in questions if q["id"] == qid), None)
+        if selected_q:
+            prefill = selected_q["question"]
+
+    user_q = st.text_input("Upiši pitanje:", value=prefill, placeholder="Npr. Što je digitalna inovacija?")
 
     if st.button("Pošalji") and user_q.strip():
-        # prvo dohvati podatke
-        embedder = load_embedder()
-        collection = load_chroma_collection()
+        redacted_q, redaction_report = redact_personal_data(user_q)
+        embedder = get_embedder()
+        collection = get_collection()
+        rules = get_routing_rules()
 
-        docs, metas, dists = retrieve_context(collection, embedder, user_q, top_k=top_k)
+        routed_sources = route_sources(redacted_q, rules)
+        norm_q = normalize_query(redacted_q)
 
-        # odluci jel imamo dovoljno za odgovor
-        need_clarify, reason = should_ask_clarifying_question(docs, dists)
+        docs, metas, dists, where = retrieve_context(
+            collection, embedder, redacted_q, top_k=top_k, routed_sources=routed_sources
+        )
 
+        need_clarify, reason = should_clarify(docs, dists)
         if need_clarify:
-            answer = f"Napomena: {reason}\n\n" + generate_clarifying_questions(user_q)
+            answer = f"Napomena: {reason}\n\n{clarifying_questions()}"
             citations = ""
-            debug = {"distances": dists[:3], "top_sources": [(m.get("source"), m.get("page")) for m in metas[:3]]}
         else:
-            prompt = build_prompt(user_q, docs, metas)
-            try:
-                answer = call_llm(model_name, prompt)
-            except Exception as e:
-                answer = f"Greška: Ne mogu doći do Ollama modela '{model_name}'. Provjeri jel pokrenut. Detalji: {e}"
-            citations = format_citations(metas)
-            debug = {"distances": dists[:3], "top_sources": [(m.get("source"), m.get("page")) for m in metas[:3]]}
+            prompt = build_prompt(redacted_q, docs, metas)
 
+            cache_hit = None
+            cache_key = None
+            if selected_q:
+                cache_key = stable_key(
+                    selected_q["id"],
+                    norm_q,
+                    model_name,
+                    str(top_k),
+                    str(DEFAULT_TEMPERATURE),
+                    str(collection.count()),
+                )
+                cache_hit = get_cached_answer(cache_key)
+
+            if cache_hit:
+                answer = cache_hit["answer"]
+            else:
+                try:
+                    answer = call_llm(model_name, prompt, temperature=DEFAULT_TEMPERATURE)
+                except Exception as e:
+                    answer = f"Greška: {e}"
+
+                if cache_key and selected_q:
+                    set_cached_answer(cache_key, {"answer": answer})
+
+            citations = format_citations(metas)
+
+        debug = {"redaction": redaction_report, "distances_top3": dists[:3]}
         st.session_state.history.append((user_q, answer, citations, debug))
 
-    # ispis chat-a unazad
     for q, a, c, debug in reversed(st.session_state.history):
-        st.markdown(f"**Student:** {q}")
-        st.markdown(f"**Asistent:**\n\n{a}")
+        st.markdown(
+            f"<p style='color: #aaa; font-style: italic; margin-bottom: 0px;'>Pitanje: {q}</p>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f"<div style='font-size: 1.1rem; font-weight: 500; line-height: 1.6;'>{a}</div>",
+            unsafe_allow_html=True,
+        )
+
         if c:
-            st.markdown("**IZVORI:**")
-            st.markdown(c)
-        with st.expander("Debug info (interni podaci)", expanded=False):
-            st.write(debug)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div style='color: #666; font-size: 0.85rem; font-style: italic; border-top: 0.5px solid #444; padding-top: 10px;'>
+                Korišteni izvori:<br>{c}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        if show_debug:
+            with st.expander("Debug info", expanded=False):
+                st.write(debug)
+
         st.divider()
