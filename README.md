@@ -4,8 +4,7 @@ AI asistent za podršku učenju (RAG + vektorska baza) - TBI projekt
 
 za pokrenuti prvo skinuti requirements.txt
 
-onda:
+onda u terminal:
 
-> python ingest.py
-pa
-> streamlit run app.py
+python ingest.py
+streamlit run app.py
