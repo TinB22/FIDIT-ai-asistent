@@ -1,6 +1,5 @@
 import json
 import os
-import re
 from typing import List, Dict, Any, Tuple, Optional
 
 import chromadb
@@ -24,7 +23,7 @@ def load_embedder() -> SentenceTransformer:
 def load_collection():
     client = chromadb.PersistentClient(
         path=CHROMA_DIR,
-        settings=Settings(anonymized_telemetry=False),
+        settings=Settings(anonymized_telemetry=False)
     )
     return client.get_or_create_collection(name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
 
@@ -45,68 +44,27 @@ def load_routing_rules() -> List[Dict[str, Any]]:
 
 
 def route_sources(query: str, rules: List[Dict[str, Any]]) -> Optional[List[str]]:
+    """
+    Returns list of sources to filter on, or None if no routing match.
+    """
     q = query.lower()
-    matched_sources: List[str] = []
+    matched_sources = []
     for rule in rules:
         kws = [k.lower() for k in rule.get("keywords", [])]
         if any(kw in q for kw in kws):
             matched_sources.extend(rule.get("sources", []))
+    # unique
     matched_sources = list(dict.fromkeys(matched_sources))
     return matched_sources if matched_sources else None
 
 
-def _split_query_terms(query: str) -> List[str]:
-    q = normalize_query(query)
-    tokens = re.findall(r"[a-zA-ZčćđšžČĆĐŠŽ0-9]+", q)
-    stop = {
-        "što", "sta", "je", "su", "se", "u", "na", "za", "od", "do", "i", "ili", "a",
-        "kako", "koji", "koja", "koje", "kada", "gdje", "zasto", "zašto",
-        "objasni", "navedi", "primjer", "primjeri", "definicija", "pojam",
-        "molim", "možeš", "mozete", "možete",
-    }
-    terms = [t for t in tokens if len(t) >= 4 and t not in stop]
-    return list(dict.fromkeys(terms))
-
-
-def _rerank_by_term_overlap(
-    docs: List[str],
-    metas: List[Dict[str, Any]],
-    dists: List[float],
-    query: str,
-) -> Tuple[List[str], List[Dict[str, Any]], List[float]]:
-    terms = _split_query_terms(query)
-    if not terms:
-        return docs, metas, dists
-
-    scored = []
-    for i, doc in enumerate(docs):
-        text = (doc or "").lower()
-        overlap = sum(1 for t in terms if t in text)
-
-        penalty = 0.08 if overlap == 0 else 0.0
-        bonus = -0.02 * min(overlap, 5)
-
-        new_dist = float(dists[i]) + penalty + bonus
-        scored.append((new_dist, i))
-
-    scored.sort(key=lambda x: x[0])
-    new_docs = [docs[i] for _, i in scored]
-    new_metas = [metas[i] for _, i in scored]
-    new_dists = [dists[i] for _, i in scored]
-    return new_docs, new_metas, new_dists
-
-
-def retrieve_context(
-    collection,
-    embedder,
-    query: str,
-    top_k: int,
-    routed_sources: Optional[List[str]] = None,
-):
+def retrieve_context(collection, embedder, query: str, top_k: int, routed_sources: Optional[List[str]] = None):
     q_emb = embedder.encode([query], normalize_embeddings=True).tolist()
 
     where = None
     if routed_sources:
+        # Chroma "where" ne podržava uvijek $in ovisno o verziji, pa radimo jednostavno:
+        # Ako ima više izvora, probamo $or; ako ne radi u vašoj verziji, fallback na single-source.
         if len(routed_sources) == 1:
             where = {"source": routed_sources[0]}
         else:
@@ -116,16 +74,12 @@ def retrieve_context(
         query_embeddings=q_emb,
         n_results=top_k,
         where=where,
-        include=["documents", "metadatas", "distances"],
+        include=["documents", "metadatas", "distances"]
     )
 
     docs = res.get("documents", [[]])[0]
     metas = res.get("metadatas", [[]])[0]
     dists = res.get("distances", [[]])[0]
-
-    if docs and metas and dists:
-        docs, metas, dists = _rerank_by_term_overlap(docs, metas, dists, query)
-
     return docs, metas, dists, where
 
 
@@ -161,71 +115,27 @@ def clarifying_questions() -> str:
 
 
 def build_prompt(user_q: str, context_docs: List[str], context_metas: List[Dict[str, Any]]) -> str:
+    citations = format_citations(context_metas)
     joined = "\n\n---\n\n".join(context_docs)
-    context_block = joined[:4000]
+    context_block = joined[:5000] # Malo smo povećali limit za bogatiji kontekst
 
     return f"""
-Ti si AI asistent za podršku učenju.
-Odgovaraj prvenstveno na temelju priloženih službenih materijala kolegija.
-Ako informacija nije u kontekstu ili je kontekst očito o drugoj temi, jasno reci da nisi siguran i postavi podpitanje.
+Ti si stručni akademski asistent na fakultetu (FIDIT). Tvoj zadatak je pomoći studentu da duboko razumije koncepte digitalne ekonomije i inovacija.
 
-PRAVILA:
-- Ne izmišljaj činjenice.
-- Drži se teme upita.
-- Ne uvodi pojmove koji nisu u kontekstu.
-- Budi jasan i pedagoški nastrojen.
-- Ne traži niti pohranjuj osobne podatke.
+UPUTE ZA ODGOVARANJE:
+1. DEFINICIJA: Počni s jasnom i stručnom definicijom pojma iz materijala.
+2. OBJAŠNJENJE: Objasni "zašto" i "kako" (ne samo "što"). Poveži pojam sa širim kontekstom digitalne transformacije.
+3. PRIMJER: Navedi konkretan primjer iz materijala ili realnog poslovanja koji ilustrira pojam.
+4. DOSLJEDNOST: Koristi isključivo priloženi kontekst. Ako u kontekstu nema dovoljno informacija, navedi što nedostaje.
 
 PITANJE STUDENTA:
-{user_q}
+"{user_q}"
 
-KONTEKST (iz vektorske baze):
+KONTEKST IZ MATERIJALA:
 {context_block}
 
-Odgovori na hrvatskom.
+IZVORI:
+{citations}
+
+Odgovori na hrvatskom jeziku, profesionalnim i poticajnim tonom.
 """
-
-
-def extractive_fallback_answer(user_q: str, docs: List[str], max_chars: int = 900) -> str:
-    """
-    Fallback bez LLM-a (ako Ollama pukne).
-    Vrati najrelevantnije rečenice iz dohvaćenih chunkova.
-    """
-    if not docs:
-        return "Ne mogu generirati odgovor jer nema dovoljno relevantnih materijala u bazi."
-
-    text = " ".join(docs)
-    text = re.sub(r"\s+", " ", text).strip()
-
-    # razbij na "rečenice" grubo
-    sentences = re.split(r"(?<=[\.\!\?])\s+", text)
-    terms = _split_query_terms(user_q)
-
-    def score(s: str) -> int:
-        s_low = s.lower()
-        return sum(1 for t in terms if t in s_low)
-
-    ranked = sorted(sentences, key=score, reverse=True)
-    picked = []
-    total = 0
-    for s in ranked:
-        s = s.strip()
-        if not s:
-            continue
-        # preskoči jako kratko
-        if len(s) < 40:
-            continue
-        if s in picked:
-            continue
-        if total + len(s) + 1 > max_chars:
-            break
-        picked.append(s)
-        total += len(s) + 1
-        if len(picked) >= 5:
-            break
-
-    if not picked:
-        # fallback: vrati početak konteksta
-        return (docs[0][:max_chars]).strip()
-
-    return " ".join(picked).strip()
