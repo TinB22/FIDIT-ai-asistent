@@ -7,4 +7,5 @@ za pokrenuti prvo skinuti requirements.txt
 onda:
 
 > python ingest.py
+pa
 > streamlit run app.py
