@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import streamlit as st
 import ollama
@@ -22,7 +22,7 @@ from src.cache import stable_key, get_cached_answer, set_cached_answer
 
 
 DEFAULT_LLM_MODEL = "mistral"
-DEFAULT_TOP_K = 5
+DEFAULT_TOP_K = 3
 FIXED_TEMPERATURE = 0.2
 
 
@@ -59,9 +59,8 @@ def context_limit_for_topk(top_k: int) -> int:
 
 
 def num_predict_for_topk(top_k: int) -> int:
-    # malo podignuto da izbjegnemo rezanje sekcija
-    # 2 -> 240 tokena, 10 -> 680 tokena
-    return int(240 + (top_k - 2) * (440 / 8))
+    # dinamicki namjestamo kakav ce biti max broj tokena (num_predict)
+    return int(320 + (top_k - 2) * (560 / 8))
 
 
 def verbosity_for_topk(top_k: int) -> str:
@@ -72,7 +71,7 @@ def verbosity_for_topk(top_k: int) -> str:
     return "medium"
 
 
-def call_llm(model_name: str, prompt: str, temperature: float, num_predict: int) -> str:
+def call_llm(model_name: str, prompt: str, temperature: float, num_predict: int) -> Tuple[str, bool]:
     resp = ollama.generate(
         model=model_name,
         prompt=prompt,
@@ -81,7 +80,11 @@ def call_llm(model_name: str, prompt: str, temperature: float, num_predict: int)
             "num_predict": num_predict,
         },
     )
-    return resp["response"].strip()
+    answer = (resp.get("response") or "").strip()
+    done_reason = str(resp.get("done_reason") or "").lower()
+    eval_count = resp.get("eval_count")
+    hit_limit = done_reason in {"length", "max_tokens"} or eval_count == num_predict
+    return answer, hit_limit
 
 
 def looks_truncated(text: str) -> bool:
@@ -131,7 +134,7 @@ NASTAVAK:
 
 
 # UI SETUP
-st.set_page_config(page_title="FIDIT AI asistent", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="FIDIT AI asistent", layout="wide")
 st.title(" FIDIT – AI asistent za podršku učenju")
 
 with st.expander("ℹ Važne informacije (transparentnost)", expanded=False):
@@ -145,7 +148,7 @@ col1, col2 = st.columns([2, 1])
 with col2:
     st.subheader(" Postavke")
     model_name = st.text_input("Ollama model", value=DEFAULT_LLM_MODEL)
-    top_k = st.slider("Broj dohvaćenih odlomaka (top_k)", 2, 10, DEFAULT_TOP_K)
+    top_k = st.slider("Manji broj (brže, ali manje teksta odgovora), Veći broj (sporije, ali više teksta odgovora)", 2, 10, DEFAULT_TOP_K)
     show_debug = st.checkbox("Prikaži debug info", value=False)
 
     if st.button(" Provjeri bazu"):
@@ -237,15 +240,16 @@ with col1:
             else:
                 with st.spinner("Generiram odgovor..."):
                     try:
-                        answer = call_llm(
+                        answer, hit_limit = call_llm(
                             model_name,
                             prompt,
                             temperature=FIXED_TEMPERATURE,
                             num_predict=max_out,
                         )
 
-                        # Ako je ipak odrezano, dopuni jednim kratkim nastavkom
-                        if looks_truncated(answer):
+                        
+                        # nastavit jednom ako model dosegne ogranicenje generiranja ili izlaz izgleda smanjen
+                        if hit_limit or looks_truncated(answer):
                             cont = continue_answer(
                                 model_name,
                                 answer,
