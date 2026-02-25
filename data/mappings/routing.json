@@ -1,24 +1,205 @@
 {
   "rules": [
     {
-      "keywords": ["swot"],
-      "sources": ["1. Inovacija, ideja i analiza tržišta.pdf"]
+      "keywords": [
+        "inovacija",
+        "inovacije",
+        "ideja",
+        "kreativnost",
+        "validacija ideje",
+        "upravljanje inovacijom",
+        "intelektualno vlasništvo",
+        "intelektualno vlasnistvo",
+        "patent",
+        "copyright",
+        "autorsko pravo",
+        "swot",
+        "pest",
+        "pestle",
+        "analiza tržišta",
+        "analiza trzista",
+        "tržište",
+        "trziste"
+      ],
+      "sources": [
+        "1. Inovacija, ideja i analiza tržišta.pdf"
+      ]
     },
     {
-      "keywords": ["pestle", "pest", "analiza okruženja"],
-      "sources": ["1. Inovacija, ideja i analiza tržišta.pdf"]
+      "keywords": [
+        "elektroničko poslovanje",
+        "elektronicko poslovanje",
+        "e-poslovanje",
+        "eposlovanje",
+        "razvoj e-poslovanja",
+        "prednosti e-poslovanja",
+        "nedostaci e-poslovanja",
+        "e-tržište",
+        "e-trziste",
+        "e-trgovina",
+        "poslovni modeli",
+        "modeli e-trgovine"
+      ],
+      "sources": [
+        "2. Uvod u ePoslovanje.pdf"
+      ]
     },
     {
-      "keywords": ["lean", "mvp", "bmc", "business model canvas"],
-      "sources": ["3. Lean i BMC.pdf"]
+      "keywords": [
+        "startup",
+        "lean",
+        "lean startup",
+        "mvp",
+        "bmc",
+        "business model canvas",
+        "lean canvas",
+        "startup platno",
+        "platno",
+        "value proposition",
+        "segment kupaca"
+      ],
+      "sources": [
+        "3. Lean i BMC.pdf"
+      ]
     },
     {
-      "keywords": ["sigurnost", "enkripcija", "ssl", "tls", "phishing", "2fa", "autentikacija"],
-      "sources": ["5. ePlaćanje i sigurnost.pdf"]
+      "keywords": [
+        "primjena e-poslovanja",
+        "primjena eposlovanja",
+        "e-nekretnine",
+        "e-osiguranje",
+        "e-burza",
+        "e-bankarstvo",
+        "e-turizam",
+        "e-aukcije",
+        "e-zabava",
+        "pravni aspekti",
+        "etički aspekti",
+        "eticki aspekti",
+        "društveni aspekti",
+        "drustveni aspekti"
+      ],
+      "sources": [
+        "4. Primjena E-poslovanja.pdf"
+      ]
     },
     {
-      "keywords": ["gdpr", "privatnost", "društvene mreže"],
-      "sources": ["9. Razvoj IKT, privatnost i društvene ... .pdf"]
+      "keywords": [
+        "e-plaćanje",
+        "e-placanje",
+        "elektroničko plaćanje",
+        "elektronicko placanje",
+        "metode e-plaćanja",
+        "rizici e-plaćanja",
+        "rizici e-placanja",
+        "e-novac",
+        "mikroplaćanje",
+        "mikroplacanje",
+        "sigurnost",
+        "privatnost",
+        "protokoli",
+        "ssl",
+        "tls",
+        "enkripcija",
+        "digitalni potpis",
+        "autentikacija",
+        "2fa",
+        "phishing",
+        "zaštita e-poslovanja",
+        "zastita e-poslovanja"
+      ],
+      "sources": [
+        "5. ePlaćanje i sigurnost.pdf"
+      ]
+    },
+    {
+      "keywords": [
+        "financiranje startupa",
+        "financiranje startupa",
+        "mikrofinanciranje",
+        "izvori financiranja",
+        "crowdfunding",
+        "poduzetnički inkubator",
+        "poduzetnicki inkubator",
+        "financijski plan",
+        "startup poduzeće",
+        "startup poduzece"
+      ],
+      "sources": [
+        "6 Financiranje sturtup-a.pdf"
+      ]
+    },
+    {
+      "keywords": [
+        "poslovni plan",
+        "plan startup projekta",
+        "startup projekt",
+        "startup pogreške",
+        "startup pogreske",
+        "analiza konkurenata",
+        "marketinški plan",
+        "marketinski plan",
+        "operativni plan",
+        "startup pitch",
+        "pitch",
+        "studija slučaja",
+        "studija slucaja",
+        "dokumentacija digitalnog rješenja",
+        "dokumentacija digitalnog rjesenja"
+      ],
+      "sources": [
+        "7. Cjeloviti plan startup projekta.pdf"
+      ]
+    },
+    {
+      "keywords": [
+        "standardi e-poslovanja",
+        "standardi eposlovanja",
+        "standardi",
+        "arhitektura sustava",
+        "infrastruktura sustava",
+        "elektronički dokumenti",
+        "elektronicki dokumenti",
+        "xml",
+        "edi"
+      ],
+      "sources": [
+        "8. Standardi ePoslovanja.pdf"
+      ]
+    },
+    {
+      "keywords": [
+        "razvoj ikt",
+        "ikt",
+        "informacijsko-komunikacijska tehnologija",
+        "informacijsko komunikacijska tehnologija",
+        "privatnost",
+        "društvene mreže",
+        "drustvene mreze",
+        "tehnološki razvoj",
+        "tehnoloski razvoj",
+        "evolucija tehnologije"
+      ],
+      "sources": [
+        "9. Razvoj IKT, privatnost i društvene mreže.pdf"
+      ]
+    },
+    {
+      "keywords": [
+        "ikt i obrazovanje",
+        "obrazovanje",
+        "tehnologija u obrazovanju",
+        "ekonomija",
+        "kultura",
+        "demokracija",
+        "budućnost rada",
+        "buducnost rada",
+        "digitalne vještine",
+        "digitalne vjestine"
+      ],
+      "sources": [
+        "10. IKT, obrazovanje, ekonomija, kultura i demokracija.pdf"
+      ]
     }
   ]
 }

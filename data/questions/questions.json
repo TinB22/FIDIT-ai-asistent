@@ -3,20 +3,212 @@
     {
       "id": "Q001",
       "type": "teorija",
-      "question": "Što je SWOT analiza i čemu služi?",
-      "tags": ["swot", "analiza tržišta"]
+      "question": "Sto je inovacija i po cemu se razlikuje od ideje?",
+      "tags": ["inovacija", "ideja"]
     },
     {
       "id": "Q002",
       "type": "teorija",
-      "question": "Objasni PESTLE analizu i navedi primjer faktora.",
-      "tags": ["pestle", "okruženje"]
+      "question": "Objasni SWOT analizu i njenu svrhu u analizi trzista.",
+      "tags": ["swot", "analiza trzista"]
     },
     {
       "id": "Q003",
+      "type": "teorija",
+      "question": "Objasni PESTLE analizu i navedi po jedan primjer faktora.",
+      "tags": ["pestle", "okruzenje"]
+    },
+    {
+      "id": "Q004",
       "type": "prakticno",
-      "question": "Napravi primjer SWOT analize za mali web shop koji prodaje lokalne proizvode.",
-      "tags": ["swot", "primjer"]
+      "question": "Napravi kratku SWOT analizu za mali web shop lokalnih proizvoda.",
+      "tags": ["swot", "primjer", "web shop"]
+    },
+    {
+      "id": "Q005",
+      "type": "teorija",
+      "question": "Sto je elektroničko poslovanje i koje su mu glavne prednosti i nedostaci?",
+      "tags": ["e-poslovanje", "prednosti", "nedostaci"]
+    },
+    {
+      "id": "Q006",
+      "type": "teorija",
+      "question": "Objasni razliku izmedu e-poslovanja i e-trgovine.",
+      "tags": ["e-poslovanje", "e-trgovina"]
+    },
+    {
+      "id": "Q007",
+      "type": "teorija",
+      "question": "Koji su osnovni poslovni modeli e-trgovine?",
+      "tags": ["e-trgovina", "poslovni modeli"]
+    },
+    {
+      "id": "Q008",
+      "type": "prakticno",
+      "question": "Predlozi model e-trgovine za startup koji prodaje digitalne edukacije.",
+      "tags": ["e-trgovina", "startup", "model"]
+    },
+    {
+      "id": "Q009",
+      "type": "teorija",
+      "question": "Sto je Lean startup pristup?",
+      "tags": ["lean", "startup"]
+    },
+    {
+      "id": "Q010",
+      "type": "teorija",
+      "question": "Sto je MVP i zasto je bitan u razvoju startupa?",
+      "tags": ["mvp", "lean", "startup"]
+    },
+    {
+      "id": "Q011",
+      "type": "teorija",
+      "question": "Objasni elemente Business Model Canvas (BMC).",
+      "tags": ["bmc", "business model canvas"]
+    },
+    {
+      "id": "Q012",
+      "type": "prakticno",
+      "question": "Napravi primjer Lean Canvas-a za aplikaciju za studentske biljeske.",
+      "tags": ["lean canvas", "startup", "primjer"]
+    },
+    {
+      "id": "Q013",
+      "type": "teorija",
+      "question": "Koji su glavni oblici primjene e-poslovanja?",
+      "tags": ["primjena e-poslovanja", "oblici"]
+    },
+    {
+      "id": "Q014",
+      "type": "teorija",
+      "question": "Objasni ulogu e-bankarstva i e-aukcija u digitalnom gospodarstvu.",
+      "tags": ["e-bankarstvo", "e-aukcije", "digitalno gospodarstvo"]
+    },
+    {
+      "id": "Q015",
+      "type": "teorija",
+      "question": "Koji su pravni, eticki i drustveni aspekti e-poslovanja?",
+      "tags": ["pravni aspekti", "eticki aspekti", "drustveni aspekti"]
+    },
+    {
+      "id": "Q016",
+      "type": "prakticno",
+      "question": "Daj primjer etickog problema u e-poslovanju i predlozi rjesenje.",
+      "tags": ["etika", "primjer", "e-poslovanje"]
+    },
+    {
+      "id": "Q017",
+      "type": "teorija",
+      "question": "Sto je e-placanje i koje metode e-placanja postoje?",
+      "tags": ["e-placanje", "metode"]
+    },
+    {
+      "id": "Q018",
+      "type": "teorija",
+      "question": "Koji su glavni rizici e-placanja?",
+      "tags": ["e-placanje", "rizici", "sigurnost"]
+    },
+    {
+      "id": "Q019",
+      "type": "teorija",
+      "question": "Objasni pojmove enkripcija, autentikacija i digitalni potpis.",
+      "tags": ["enkripcija", "autentikacija", "digitalni potpis"]
+    },
+    {
+      "id": "Q020",
+      "type": "prakticno",
+      "question": "Predlozi osnovne mjere zastite za mali web shop koji prima online placanja.",
+      "tags": ["sigurnost", "zastita", "web shop", "online placanje"]
+    },
+    {
+      "id": "Q021",
+      "type": "teorija",
+      "question": "Koje izvore financiranja startup moze koristiti u ranoj fazi?",
+      "tags": ["financiranje", "startup", "izvori"]
+    },
+    {
+      "id": "Q022",
+      "type": "teorija",
+      "question": "Objasni razliku izmedu mikrofinanciranja i crowdfunding-a.",
+      "tags": ["mikrofinanciranje", "crowdfunding"]
+    },
+    {
+      "id": "Q023",
+      "type": "teorija",
+      "question": "Koja je uloga poduzetnickih inkubatora za startup poduzeca?",
+      "tags": ["inkubator", "startup poduzece"]
+    },
+    {
+      "id": "Q024",
+      "type": "prakticno",
+      "question": "Napravi skicu financijskog plana za startup u prve 2 godine.",
+      "tags": ["financijski plan", "startup", "prakticno"]
+    },
+    {
+      "id": "Q025",
+      "type": "teorija",
+      "question": "Koji su kljucni dijelovi cjelovitog poslovnog plana startup projekta?",
+      "tags": ["poslovni plan", "startup projekt"]
+    },
+    {
+      "id": "Q026",
+      "type": "teorija",
+      "question": "Koje su najcesce startup pogreske i kako ih smanjiti?",
+      "tags": ["startup pogreske", "rizici"]
+    },
+    {
+      "id": "Q027",
+      "type": "teorija",
+      "question": "Cemu sluzi startup pitch i sto treba sadrzavati?",
+      "tags": ["startup pitch", "prezentacija"]
+    },
+    {
+      "id": "Q028",
+      "type": "prakticno",
+      "question": "Napravi kratki pitch (5-6 recenica) za startup za edukacijsku platformu.",
+      "tags": ["pitch", "startup", "primjer"]
+    },
+    {
+      "id": "Q029",
+      "type": "teorija",
+      "question": "Sto su standardi e-poslovanja i zasto su vazni?",
+      "tags": ["standardi e-poslovanja", "standardi"]
+    },
+    {
+      "id": "Q030",
+      "type": "teorija",
+      "question": "Objasni odnos arhitekture sustava i infrastrukture u e-poslovanju.",
+      "tags": ["arhitektura sustava", "infrastruktura"]
+    },
+    {
+      "id": "Q031",
+      "type": "teorija",
+      "question": "Sto su elektronicki dokumenti u kontekstu e-poslovanja?",
+      "tags": ["elektronicki dokumenti", "dokumenti"]
+    },
+    {
+      "id": "Q032",
+      "type": "teorija",
+      "question": "Kako razvoj IKT utjece na privatnost korisnika?",
+      "tags": ["ikt", "privatnost"]
+    },
+    {
+      "id": "Q033",
+      "type": "teorija",
+      "question": "Koji su glavni rizici drustvenih mreza za pojedinca i organizacije?",
+      "tags": ["drustvene mreze", "rizici", "privatnost"]
+    },
+    {
+      "id": "Q034",
+      "type": "teorija",
+      "question": "Kako IKT utjece na obrazovanje i buduce trziste rada?",
+      "tags": ["ikt", "obrazovanje", "buducnost rada"]
+    },
+    {
+      "id": "Q035",
+      "type": "teorija",
+      "question": "Objasni povezanost IKT-a, ekonomije, kulture i demokracije.",
+      "tags": ["ikt", "ekonomija", "kultura", "demokracija"]
     }
   ]
 }
