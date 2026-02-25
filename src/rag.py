@@ -23,9 +23,12 @@ def load_embedder() -> SentenceTransformer:
 def load_collection():
     client = chromadb.PersistentClient(
         path=CHROMA_DIR,
-        settings=Settings(anonymized_telemetry=False)
+        settings=Settings(anonymized_telemetry=False),
     )
-    return client.get_or_create_collection(name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
+    return client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+    )
 
 
 def normalize_query(q: str) -> str:
@@ -44,27 +47,27 @@ def load_routing_rules() -> List[Dict[str, Any]]:
 
 
 def route_sources(query: str, rules: List[Dict[str, Any]]) -> Optional[List[str]]:
-    """
-    Returns list of sources to filter on, or None if no routing match.
-    """
     q = query.lower()
-    matched_sources = []
+    matched_sources: List[str] = []
     for rule in rules:
         kws = [k.lower() for k in rule.get("keywords", [])]
         if any(kw in q for kw in kws):
             matched_sources.extend(rule.get("sources", []))
-    # unique
     matched_sources = list(dict.fromkeys(matched_sources))
     return matched_sources if matched_sources else None
 
 
-def retrieve_context(collection, embedder, query: str, top_k: int, routed_sources: Optional[List[str]] = None):
+def retrieve_context(
+    collection,
+    embedder,
+    query: str,
+    top_k: int,
+    routed_sources: Optional[List[str]] = None,
+):
     q_emb = embedder.encode([query], normalize_embeddings=True).tolist()
 
     where = None
     if routed_sources:
-        # Chroma "where" ne podržava uvijek $in ovisno o verziji, pa radimo jednostavno:
-        # Ako ima više izvora, probamo $or; ako ne radi u vašoj verziji, fallback na single-source.
         if len(routed_sources) == 1:
             where = {"source": routed_sources[0]}
         else:
@@ -74,7 +77,7 @@ def retrieve_context(collection, embedder, query: str, top_k: int, routed_source
         query_embeddings=q_emb,
         n_results=top_k,
         where=where,
-        include=["documents", "metadatas", "distances"]
+        include=["documents", "metadatas", "distances"],
     )
 
     docs = res.get("documents", [[]])[0]
@@ -87,11 +90,13 @@ def format_citations(metas: List[Dict[str, Any]]) -> str:
     seen = set()
     lines = []
     for m in metas:
-        key = (m.get("source"), m.get("page"))
+        source = m.get("source", "Nepoznat izvor")
+        clean_source = source.split(". ", 1)[-1] if ". " in source else source
+        key = (clean_source, m.get("page"))
         if key in seen:
             continue
         seen.add(key)
-        lines.append(f"- {m.get('source')} (str. {m.get('page')})")
+        lines.append(f"- {clean_source} (str. {m.get('page')})")
     return "\n".join(lines) if lines else "- (nema citata)"
 
 
@@ -101,7 +106,7 @@ def should_clarify(docs: List[str], dists: List[float]) -> Tuple[bool, str]:
     if not dists:
         return True, "Nemam dovoljno signala za odgovor."
     if dists[0] > MAX_DISTANCE_FOR_CONFIDENCE:
-        return True, "Pitanje je preširoko ili nije jasno povezano s materijalima."
+        return True, "Pitanje nije jasno povezano s materijalima kolegija."
     return False, ""
 
 
@@ -114,19 +119,53 @@ def clarifying_questions() -> str:
     )
 
 
-def build_prompt(user_q: str, context_docs: List[str], context_metas: List[Dict[str, Any]]) -> str:
-    citations = format_citations(context_metas)
+def build_prompt(
+    user_q: str,
+    context_docs: List[str],
+    context_metas: List[Dict[str, Any]],
+    max_context_chars: int = 7000,
+    verbosity: str = "medium",  # "short" | "medium" | "long"
+) -> str:
     joined = "\n\n---\n\n".join(context_docs)
-    context_block = joined[:5000] # Malo smo povećali limit za bogatiji kontekst
+    context_block = joined[:max_context_chars]
+
+    if verbosity == "short":
+        length_rules = (
+            "- Napiši KRATAK odgovor: ukupno 4–6 rečenica.\n"
+            "- DEFINICIJA: 1–2 rečenice.\n"
+            "- OBJAŠNJENJE: 2–3 rečenice.\n"
+            "- PRIMJER: 1 rečenica.\n"
+        )
+    elif verbosity == "long":
+        length_rules = (
+            "- Napiši OPŠIRNIJI odgovor, ali bez nepotrebnog ponavljanja.\n"
+            "- DEFINICIJA: 2–3 rečenice.\n"
+            "- OBJAŠNJENJE: 5–8 rečenica (može u bulletima).\n"
+            "- PRIMJER: 2–4 rečenice.\n"
+        )
+    else:
+        length_rules = (
+            "- Napiši SREDNJE DUG odgovor.\n"
+            "- DEFINICIJA: 1–2 rečenice.\n"
+            "- OBJAŠNJENJE: 3–5 rečenica.\n"
+            "- PRIMJER: 1–2 rečenice.\n"
+        )
 
     return f"""
-Ti si stručni akademski asistent na fakultetu (FIDIT). Tvoj zadatak je pomoći studentu da duboko razumije koncepte digitalne ekonomije i inovacija.
+Ti si stručni akademski asistent na fakultetu (FIDIT). Tvoj zadatak je pomoći studentu da razumije koncepte digitalne ekonomije.
 
-UPUTE ZA ODGOVARANJE:
-1. DEFINICIJA: Počni s jasnom i stručnom definicijom pojma iz materijala.
-2. OBJAŠNJENJE: Objasni "zašto" i "kako" (ne samo "što"). Poveži pojam sa širim kontekstom digitalne transformacije.
-3. PRIMJER: Navedi konkretan primjer iz materijala ili realnog poslovanja koji ilustrira pojam.
-4. DOSLJEDNOST: Koristi isključivo priloženi kontekst. Ako u kontekstu nema dovoljno informacija, navedi što nedostaje.
+STRUKTURA ODGOVORA (Obavezno prati ovaj redoslijed):
+1. **DEFINICIJA**
+2. **OBJAŠNJENJE**
+3. **PRIMJER**
+
+PRAVILA:
+- Odgovaraj ISKLJUČIVO na temelju priloženog KONTEKSTA.
+- Koristi se službenim hrvatskim jezikom.
+- Profesionalan, ali pristupačan ton.
+- Ako informacija nedostaje, reci: "Na temelju dostupnih materijala, ne mogu u potpunosti odgovoriti..."
+- Ne započinji novu sekciju ako nema dovoljno mjesta; radije skrati zadnju rečenicu i završi odgovor potpunom rečenicom.
+{length_rules}
 
 PITANJE STUDENTA:
 "{user_q}"
@@ -134,8 +173,5 @@ PITANJE STUDENTA:
 KONTEKST IZ MATERIJALA:
 {context_block}
 
-IZVORI:
-{citations}
-
-Odgovori na hrvatskom jeziku, profesionalnim i poticajnim tonom.
+Odgovori na hrvatskom jeziku.
 """

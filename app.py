@@ -1,11 +1,10 @@
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import streamlit as st
 import ollama
 
-# Importi iz vlastitih skripti (lokalni moduli)
 from src.rag import (
     load_collection,
     load_embedder,
@@ -24,8 +23,6 @@ from src.cache import stable_key, get_cached_answer, set_cached_answer
 
 DEFAULT_LLM_MODEL = "mistral"
 DEFAULT_TOP_K = 5
-
-# Fiksna temperatura za stabilne odgovore, num_predict uklonjen za prirodnu duljinu
 FIXED_TEMPERATURE = 0.2
 
 
@@ -56,67 +53,122 @@ def load_questions() -> List[Dict[str, Any]]:
         return []
 
 
-def call_llm(model_name: str, prompt: str, temperature: float) -> str:
-    # Poziv bez num_predict omogućuje modelu da prirodno završi misao
+def context_limit_for_topk(top_k: int) -> int:
+    # 2 -> 2500 znakova, 10 -> 9000 znakova
+    return int(2500 + (top_k - 2) * (6500 / 8))
+
+
+def num_predict_for_topk(top_k: int) -> int:
+    # malo podignuto da izbjegnemo rezanje sekcija
+    # 2 -> 240 tokena, 10 -> 680 tokena
+    return int(240 + (top_k - 2) * (440 / 8))
+
+
+def verbosity_for_topk(top_k: int) -> str:
+    if top_k <= 3:
+        return "short"
+    if top_k >= 8:
+        return "long"
+    return "medium"
+
+
+def call_llm(model_name: str, prompt: str, temperature: float, num_predict: int) -> str:
     resp = ollama.generate(
         model=model_name,
         prompt=prompt,
         options={
             "temperature": temperature,
+            "num_predict": num_predict,
         },
     )
     return resp["response"].strip()
 
 
-# ---------------------------
-# UI
-# ---------------------------
-st.set_page_config(page_title="FIDIT AI asistent", page_icon="", layout="wide")
+def looks_truncated(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+
+    # ako završava uredno, vjerojatno nije cut
+    if t.endswith((".", "!", "?", "…")):
+        return False
+
+    # tipični cut slučajevi (posebno kad krene nova sekcija)
+    bad_endings = (
+        "**PRIM", "**PRIMJ", "**PRIMJE", "**PRIMJER",
+        "**OBJA", "**OBJAŠ", "**OBJAŠNJ", "**OBJAŠNJEN",
+        "PRIM", "PRIMJ", "PRIMJE", "PRIMJER",
+        "OBJA", "OBJAŠ", "OBJAŠNJ", "OBJAŠNJEN",
+        ":", "-", "(",
+    )
+    if any(t.endswith(x) for x in bad_endings):
+        return True
+
+    # ako završava slovom/brojem bez interpunkcije, moguće je odrezano
+    return t[-1].isalnum()
+
+
+def continue_answer(model_name: str, prev_answer: str, temperature: float, num_predict: int) -> str:
+    # kratki nastavak bez ponavljanja cijelog odgovora
+    cont_prompt = f"""
+Nastavi točno tamo gdje si stao. Nemoj ponavljati već napisano.
+Završi odgovor potpunom rečenicom. Ako si krenuo sekciju PRIMJER, dovrši je u 1–2 rečenice.
+
+TEKST DO SADA:
+{prev_answer}
+
+NASTAVAK:
+"""
+    resp = ollama.generate(
+        model=model_name,
+        prompt=cont_prompt,
+        options={
+            "temperature": temperature,
+            "num_predict": num_predict,
+        },
+    )
+    return resp["response"].strip()
+
+
+# UI SETUP
+st.set_page_config(page_title="FIDIT AI asistent", page_icon="🎓", layout="wide")
 st.title(" FIDIT – AI asistent za podršku učenju")
 
-with st.expander(" Važne informacije (transparentnost)", expanded=True):
-    st.markdown(
-        """
-**Komuniciraš s AI sustavom.** Odgovori su namijenjeni isključivo kao pomoć u učenju i **ne zamjenjuju nastavu, službene materijale ni profesora**.
-
-**Privatnost:** sustav je prototip i **ne prikuplja osobne podatke** niti sprema razgovore u bazu.  
-Ako uneseš osobne podatke, preporuka je da ih ukloniš iz upita.
-
-**Izvori:** odgovori se temelje prvenstveno na službenim materijalima kolegija.  
-Kada se koristi sadržaj, sustav prikazuje citate (izvor + stranica).
-        """
-    )
+with st.expander("ℹ Važne informacije (transparentnost)", expanded=False):
+    st.markdown("""
+    **Komuniciraš s AI sustavom.** Odgovori su namijenjeni isključivo kao pomoć u učenju.
+    **Izvori:** Sustav koristi službene materijale kolegija i prikazuje reference ispod svakog odgovora.
+    """)
 
 col1, col2 = st.columns([2, 1])
 
 with col2:
-    st.subheader("Postavke")
-
+    st.subheader(" Postavke")
     model_name = st.text_input("Ollama model", value=DEFAULT_LLM_MODEL)
     top_k = st.slider("Broj dohvaćenih odlomaka (top_k)", 2, 10, DEFAULT_TOP_K)
+    show_debug = st.checkbox("Prikaži debug info", value=False)
 
-    # Temperature i num_predict maknuti iz sučelja radi čišćeg dizajna
-    show_debug = st.checkbox("Prikaži debug", value=False)
-
-    if st.button("Provjeri kolekciju"):
+    if st.button(" Provjeri bazu"):
         try:
-            collection = get_collection()
-            st.success(f"Kolekcija ima {collection.count()} dokumenata.")
+            count = get_collection().count()
+            st.success(f"Baza sadrži {count} fragmenata dokumenata.")
         except Exception as e:
-            st.error(f"Greška: {e}")
+            st.error(f"Greška pri pristupu bazi: {e}")
 
     st.divider()
-    st.subheader("Test pitanja")
-
+    st.subheader(" Test pitanja")
     questions = load_questions()
     q_labels = ["(odaberi)"] + [f"{q['id']} – {q['question']}" for q in questions]
-    selected = st.selectbox("Odaberi pitanje iz baze:", q_labels, index=0)
+    selected = st.selectbox("Brzi odabir:", q_labels, index=0)
 
 with col1:
-    st.subheader("Chat")
+    st.subheader(" Chat")
 
     if "history" not in st.session_state:
         st.session_state.history = []
+
+    if "retrieval_cache" not in st.session_state:
+        st.session_state.retrieval_cache = {}
 
     prefill = ""
     selected_q = None
@@ -126,54 +178,56 @@ with col1:
         if selected_q:
             prefill = selected_q["question"]
 
-    user_q = st.text_input("Upiši pitanje:", value=prefill, placeholder="Npr. Što je digitalna inovacija?")
+    user_q = st.text_input("Postavi pitanje:", value=prefill, placeholder="Npr. Što je SWOT analiza?")
 
     if st.button("Pošalji") and user_q.strip():
-        # 1) privacy redact
         redacted_q, redaction_report = redact_personal_data(user_q)
 
-        # 2) setup
         embedder = get_embedder()
         collection = get_collection()
         rules = get_routing_rules()
-
-        # 3) routing
         routed_sources = route_sources(redacted_q, rules)
 
-        # 4) Retrieval cache
         norm_q = normalize_query(redacted_q)
-        retrieval_key = f"retrieval::{norm_q}::{top_k}::{routed_sources}"
-        if "retrieval_cache" not in st.session_state:
-            st.session_state.retrieval_cache = {}
+        retrieval_key = f"retr_{norm_q}_{top_k}_{routed_sources}"
 
         if retrieval_key in st.session_state.retrieval_cache:
             docs, metas, dists, where = st.session_state.retrieval_cache[retrieval_key]
         else:
-            docs, metas, dists, where = retrieve_context(
-                collection, embedder, redacted_q, top_k=top_k, routed_sources=routed_sources
-            )
-            st.session_state.retrieval_cache[retrieval_key] = (docs, metas, dists, where)
+            with st.spinner("Pretražujem bazu znanja..."):
+                docs, metas, dists, where = retrieve_context(
+                    collection, embedder, redacted_q, top_k=top_k, routed_sources=routed_sources
+                )
+                st.session_state.retrieval_cache[retrieval_key] = (docs, metas, dists, where)
 
-        # 5) Clarify check
         need_clarify, reason = should_clarify(docs, dists)
+
         if need_clarify:
             answer = f" {reason}\n\n{clarifying_questions()}"
             citations = ""
         else:
-            prompt = build_prompt(redacted_q, docs, metas)
+            max_ctx = context_limit_for_topk(top_k)
+            max_out = num_predict_for_topk(top_k)
+            verbosity = verbosity_for_topk(top_k)
 
-            # 6) Disk cache za test pitanja
-            cache_hit = None
+            prompt = build_prompt(
+                redacted_q, docs, metas,
+                max_context_chars=max_ctx,
+                verbosity=verbosity
+            )
+
             cache_key = None
+            cache_hit = None
             if selected_q:
-                # num_predict maknut iz ključa jer se više ne koristi
                 cache_key = stable_key(
                     selected_q["id"],
                     norm_q,
                     model_name,
                     str(top_k),
                     str(FIXED_TEMPERATURE),
-                    str(collection.count()),
+                    str(max_ctx),
+                    str(max_out),
+                    str(verbosity),
                 )
                 cache_hit = get_cached_answer(cache_key)
 
@@ -181,46 +235,65 @@ with col1:
                 answer = cache_hit["answer"]
                 citations = cache_hit.get("citations", format_citations(metas))
             else:
-                try:
-                    # Pozivamo s fiksnom temperaturom
-                    answer = call_llm(model_name, prompt, temperature=FIXED_TEMPERATURE)
-                except Exception as e:
-                    answer = f" Ne mogu pozvati Ollama model '{model_name}'. Greška: {e}"
-                citations = format_citations(metas)
+                with st.spinner("Generiram odgovor..."):
+                    try:
+                        answer = call_llm(
+                            model_name,
+                            prompt,
+                            temperature=FIXED_TEMPERATURE,
+                            num_predict=max_out,
+                        )
 
-                if cache_key and selected_q:
-                    set_cached_answer(cache_key, {"answer": answer, "citations": citations})
+                        # Ako je ipak odrezano, dopuni jednim kratkim nastavkom
+                        if looks_truncated(answer):
+                            cont = continue_answer(
+                                model_name,
+                                answer,
+                                temperature=FIXED_TEMPERATURE,
+                                num_predict=min(180, max(80, int(max_out * 0.35))),
+                            )
+                            if cont:
+                                if not answer.endswith("\n"):
+                                    answer += "\n"
+                                answer += cont
 
-        debug = {
-            "redaction": redaction_report,
-            "routed_sources": routed_sources,
-            "where_filter": where,
-            "distances_top3": dists[:3],
-            "top_sources": [(m.get("source"), m.get("page")) for m in metas[:3]],
+                        citations = format_citations(metas)
+                        if cache_key:
+                            set_cached_answer(cache_key, {"answer": answer, "citations": citations})
+
+                    except Exception as e:
+                        answer = f" Greška pri pozivu modela: {e}"
+                        citations = ""
+
+        debug_data = {
+            "top_k": top_k,
+            "max_context_chars": context_limit_for_topk(top_k),
+            "num_predict": num_predict_for_topk(top_k),
+            "verbosity": verbosity_for_topk(top_k),
+            "distances": dists[:3] if dists else [],
+            "sources": [(m.get("source"), m.get("page")) for m in metas[:3]] if metas else [],
         }
 
-        st.session_state.history.append((user_q, answer, citations, debug))
+        st.session_state.history.append((user_q, answer, citations, debug_data))
 
-    # Render history -> prvo novije
-    for q, a, c, debug in reversed(st.session_state.history):
-        # pitanje korisnika (diskretno)
-        st.markdown(f"<p style='color: #888; font-style: italic; margin-bottom: 5px;'>Pitanje: {q}</p>", unsafe_allow_html=True)
-        
-        # glavni odgovor (istaknut i stručan)
-        st.markdown(f"<div style='font-size: 1.1rem; font-weight: 400; line-height: 1.6; color: #E0E0E0;'>{a}</div>", unsafe_allow_html=True)
-        
-        # izvori (mali, sivi i ukošeni)
+    for q, a, c, d in reversed(st.session_state.history):
+        st.markdown(
+            f"<p style='color: #888; font-style: italic; margin-bottom: 5px;'>Pitanje: {q}</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div style='background-color: #1E1E1E; padding: 20px; border-radius: 10px; margin-bottom: 10px;'>{a}</div>",
+            unsafe_allow_html=True,
+        )
+
         if c:
             st.markdown(
-                f"""
-                <div style='color: #666; font-size: 0.8rem; font-style: italic; border-top: 0.5px solid #333; padding-top: 10px; margin-top: 15px;'>
-                Reference iz materijala:<br>{c}
-                </div>
-                """, 
-                unsafe_allow_html=True
+                f"<div style='color: #555; font-size: 0.85rem; margin-bottom: 20px;'><b>Izvori:</b><br>{c}</div>",
+                unsafe_allow_html=True,
             )
-            
+
         if show_debug:
-            with st.expander("Debug info", expanded=False):
-                st.write(debug)
+            with st.expander("Debug detalji"):
+                st.json(d)
+
         st.divider()
