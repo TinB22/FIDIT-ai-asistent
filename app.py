@@ -59,8 +59,8 @@ def context_limit_for_topk(top_k: int) -> int:
 
 
 def num_predict_for_topk(top_k: int) -> int:
-    # dinamicki namjestamo kakav ce biti max broj tokena (num_predict)
-    return int(320 + (top_k - 2) * (560 / 8))
+    # balans brzine i kvalitete za slabiji hardware
+    return min(820, int(460 + (top_k - 2) * 45))
 
 
 def verbosity_for_topk(top_k: int) -> str:
