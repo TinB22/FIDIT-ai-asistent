@@ -141,6 +141,9 @@ with st.expander("ℹ Važne informacije (transparentnost)", expanded=False):
     st.markdown("""
     **Komuniciraš s AI sustavom.** Odgovori su namijenjeni isključivo kao pomoć u učenju.
     **Izvori:** Sustav koristi službene materijale kolegija i prikazuje reference ispod svakog odgovora.
+    **Važno:**
+    AI odgovori mogu sadržavati netočnosti ili nepotpune informacije.
+    Preporučuje se provjera važnih informacija u službenim materijalima kolegija.
     """)
 
 col1, col2 = st.columns([2, 1])
